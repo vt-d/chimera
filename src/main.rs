@@ -5,13 +5,12 @@ use std::mem;
 use std::{env, sync::Arc};
 
 use dotenvy::dotenv;
-use twilight_gateway::{Event, EventTypeFlags, Shard, ShardId, StreamExt, Intents, CloseFrame};
+use twilight_gateway::{CloseFrame, Event, EventTypeFlags, Intents, Shard, ShardId, StreamExt};
 use twilight_http::Client as HttpClient;
 use twilight_interactions::command::CreateCommand;
 use twilight_model::application::interaction::InteractionData;
 
 use crate::command::{HasHttpClient, StateExt};
-
 
 pub struct Bot {
     pub shard: Shard,
@@ -20,7 +19,10 @@ pub struct Bot {
 
 impl Bot {
     pub fn new(shard: Shard, client: HttpClient) -> Self {
-        Self { shard, client: Arc::new(client) }
+        Self {
+            shard,
+            client: Arc::new(client),
+        }
     }
 }
 
@@ -52,7 +54,10 @@ async fn main() -> anyhow::Result<()> {
     let initial_shard = Shard::new(
         ShardId::ONE,
         token.clone(),
-        Intents::GUILDS | Intents::GUILD_MESSAGES | Intents::GUILD_VOICE_STATES | Intents::MESSAGE_CONTENT,
+        Intents::GUILDS
+            | Intents::GUILD_MESSAGES
+            | Intents::GUILD_VOICE_STATES
+            | Intents::MESSAGE_CONTENT,
     );
 
     let client = HttpClient::new(token);
@@ -62,25 +67,24 @@ async fn main() -> anyhow::Result<()> {
 
     tracing::info!("Bot is running. Press Ctrl+C to exit.");
 
-    let bot = tokio::select! {
+    tokio::select! {
         runner_result = runner(&mut bot) => {
             match runner_result {
                 Ok(_) => {
                     tracing::info!("Runner finished successfully.");
-                    bot
                 }
                 Err(e) => {
-                    tracing::error!("Runner failed: {:?}", e);
+                    tracing::error!(error = ?e, "Runner failed");
                     return Err(e);
                 }
             }
         },
         _ = tokio::signal::ctrl_c() => {
             tracing::info!("Ctrl+C received, shutting down...");
-            bot
         }
     };
 
+    tracing::info!("Closing shard connection...");
     bot.shard.close(CloseFrame::NORMAL);
 
     Ok(())
@@ -100,33 +104,38 @@ async fn runner(bot: &mut Bot) -> anyhow::Result<()> {
             Err(source) => {
                 tracing::warn!(?source, "error receiving event");
                 tracing::error!("Error receiving event from shard, breaking loop for now.");
-                break; 
+                break;
             }
         };
 
         match event {
             Event::InteractionCreate(interaction_payload) => {
-                let mut interaction_obj = interaction_payload.0; 
-                
+                let mut interaction_obj = interaction_payload.0;
+
                 let data = match mem::take(&mut interaction_obj.data) {
                     Some(InteractionData::ApplicationCommand(data)) => *data,
                     _ => {
                         tracing::warn!("ignoring non-application-command interaction");
-                        continue; 
+                        continue;
                     }
                 };
 
-                if let Err(error) = crate::command::slash_handler(interaction_obj, data, bot.client.clone()).await {
+                if let Err(error) =
+                    crate::command::slash_handler(interaction_obj, data, bot.client.clone()).await
+                {
                     tracing::error!(?error, "error while handling slash command");
                 }
             }
             Event::MessageCreate(message_payload) => {
-                let message = message_payload.0; 
+                let message = message_payload.0;
 
                 if message.author.bot {
-                    continue; 
+                    continue;
                 }
-                if let Err(error) = crate::command::prefix_handler(message, bot.client.clone(), &configured_prefix).await {
+                if let Err(error) =
+                    crate::command::prefix_handler(message, bot.client.clone(), &configured_prefix)
+                        .await
+                {
                     tracing::error!(?error, "error while handling prefix command");
                 }
             }
@@ -147,4 +156,3 @@ async fn register_commands(bot: &Bot) -> anyhow::Result<()> {
     }
     Ok(())
 }
-

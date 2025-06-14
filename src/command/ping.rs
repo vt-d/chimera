@@ -1,13 +1,13 @@
-use crate::{command::{Command, CommandContext, HasHttpClient}, State};
+use crate::{
+    State,
+    command::{Command, CommandContext, HasHttpClient},
+};
 use anyhow::Result;
 use async_trait::async_trait;
 use twilight_interactions::command::{CommandModel, CreateCommand};
 
 #[derive(CommandModel, CreateCommand)]
-#[command(
-    name = "ping",
-    desc = "Check if the bot is responsive."
-)]
+#[command(name = "ping", desc = "Check if the bot is responsive.")]
 pub struct PingCommand;
 
 #[async_trait]

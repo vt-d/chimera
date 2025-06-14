@@ -1,5 +1,5 @@
-pub mod ping;
-pub mod music; // allow for extension someday; modulizing this
+pub mod music;
+pub mod ping; // allow for extension someday; modulizing this
 
 use std::sync::Arc;
 
@@ -11,8 +11,8 @@ use twilight_model::http::interaction::{
     InteractionResponse, InteractionResponseData, InteractionResponseType,
 };
 
-use crate::prefix_parser::Arguments;
 use crate::State;
+use crate::prefix_parser::Arguments;
 
 pub struct PrefixContext<'a> {
     pub message_id: twilight_model::id::Id<twilight_model::id::marker::MessageMarker>,
@@ -97,10 +97,9 @@ where
             parsed: arguments,
             prefix: prefix_str,
             http_client: state.http_client(),
-            message: message_ref,   
+            message: message_ref,
         };
-        Self::execute(state, CommandContext::Prefix(Box::new(prefix_ctx)))
-            .await
+        Self::execute(state, CommandContext::Prefix(Box::new(prefix_ctx))).await
     }
 
     async fn execute_slash_command(
@@ -113,8 +112,7 @@ where
             data,
             http_client: state.http_client(),
         };
-        Self::execute(state, CommandContext::Slash(Box::new(slash_ctx)))
-            .await
+        Self::execute(state, CommandContext::Slash(Box::new(slash_ctx))).await
     }
 }
 
@@ -125,13 +123,32 @@ pub async fn slash_handler(
 ) -> anyhow::Result<()> {
     match &*data.name {
         "ping" => {
-            ping::PingCommand::execute_slash_command(State { http: client.clone() }, interaction, data).await?;
-        },
+            ping::PingCommand::execute_slash_command(
+                State {
+                    http: client.clone(),
+                },
+                interaction,
+                data,
+            )
+            .await?;
+        }
         name => {
             tracing::warn!("Unknown slash command: {}", name);
         }
     }
     Ok(())
+}
+
+async fn run_prefix_command<'msg_lifetime, C>(
+    state: State,
+    message: &'msg_lifetime Message,
+    arguments: Arguments<'msg_lifetime>,
+    prefix_string: String,
+) -> anyhow::Result<()>
+where
+    C: Command<State> + Send,
+{
+    C::execute_prefix_command(state, message, arguments, prefix_string).await
 }
 
 pub async fn prefix_handler(
@@ -143,30 +160,30 @@ pub async fn prefix_handler(
         return Ok(());
     }
 
-    match crate::prefix_parser::parse(&message.content, configured_prefix) {
-        Some(parsed_command) => {
-            let command_name = parsed_command.command;
-            let arguments = parsed_command.arguments();
-            let state = State { http: client.clone() };
-            let prefix_string = configured_prefix.to_string();
+    if let Some(parsed_command) = crate::prefix_parser::parse(&message.content, configured_prefix) {
+        let command_name = parsed_command.command;
+        let arguments = parsed_command.arguments();
+        let state = State {
+            http: client.clone(),
+        };
+        let prefix_string = configured_prefix.to_string();
 
-            match command_name {
-                "ping" => {
-                    ping::PingCommand::execute_prefix_command(state, &message, arguments, prefix_string)
-                        .await?;
-                },
-                "play" => {
-                    music::PlayCommand::execute_prefix_command(state, &message, arguments, prefix_string)
-                        .await?;
-                },
-                name => {
-                    tracing::debug!("Unknown prefix command: {} from user: {}", name, message.author.name);
-                }
+        match command_name {
+            "ping" => {
+                run_prefix_command::<ping::PingCommand>(state, &message, arguments, prefix_string).await?
+            }
+            "play" => {
+                run_prefix_command::<music::PlayCommand>(state, &message, arguments, prefix_string).await?
+            }
+            name => {
+                tracing::debug!(
+                    "Unknown prefix command: {} from user: {}",
+                    name,
+                    message.author.name
+                );
             }
         }
-        None => {
-        }
-    }
+    } 
     Ok(())
 }
 

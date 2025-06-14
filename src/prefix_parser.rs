@@ -26,14 +26,16 @@ impl<'a> Iterator for Arguments<'a> {
         let arg = self.current_iter.next()?;
 
         let effective_remainder_start = self.remaining_slice_for_remainder.trim_start();
-        
+
         if let Some(pos) = effective_remainder_start.find(arg) {
             if pos == 0 {
-                let leading_whitespace_len = effective_remainder_start.as_ptr() as usize - self.remaining_slice_for_remainder.as_ptr() as usize;
+                let leading_whitespace_len = effective_remainder_start.as_ptr() as usize
+                    - self.remaining_slice_for_remainder.as_ptr() as usize;
                 let advance_by = leading_whitespace_len + arg.len();
-                
+
                 if advance_by <= self.remaining_slice_for_remainder.len() {
-                    self.remaining_slice_for_remainder = &self.remaining_slice_for_remainder[advance_by..];
+                    self.remaining_slice_for_remainder =
+                        &self.remaining_slice_for_remainder[advance_by..];
                 } else {
                     self.remaining_slice_for_remainder = "";
                 }
@@ -43,7 +45,7 @@ impl<'a> Iterator for Arguments<'a> {
         } else {
             self.remaining_slice_for_remainder = "";
         }
-        
+
         Some(arg)
     }
 }
@@ -65,7 +67,7 @@ pub fn parse<'a>(message: &'a str, prefix: &str) -> Option<ParsedCommand<'a>> {
         return None;
     }
 
-    let content_after_prefix = message.strip_prefix(prefix)?; 
+    let content_after_prefix = message.strip_prefix(prefix)?;
     let trimmed_content = content_after_prefix.trim_start();
 
     if trimmed_content.is_empty() {
@@ -73,7 +75,7 @@ pub fn parse<'a>(message: &'a str, prefix: &str) -> Option<ParsedCommand<'a>> {
     }
 
     let mut parts = trimmed_content.splitn(2, char::is_whitespace);
-    let command = parts.next().unwrap(); 
+    let command = parts.next().unwrap();
     let args_part = parts.next().unwrap_or("").trim_end();
 
     Some(ParsedCommand { command, args_part })
@@ -87,7 +89,7 @@ mod tests {
     fn test_parse_simple_command() {
         let result = parse("!echo hello world", "!").unwrap();
         assert_eq!(result.command, "echo");
-        
+
         let mut args = result.arguments();
         assert_eq!(args.next(), Some("hello"));
         assert_eq!(args.remainder(), "world");
@@ -101,7 +103,7 @@ mod tests {
     fn test_parse_command_with_extra_spaces() {
         let result = parse("!play  song  title with spaces  ", "!").unwrap();
         assert_eq!(result.command, "play");
-        
+
         let mut args = result.arguments();
         assert_eq!(args.next(), Some("song"));
         assert_eq!(args.remainder(), "title with spaces");
@@ -113,7 +115,7 @@ mod tests {
         assert_eq!(args.remainder(), "");
         assert_eq!(args.next(), None);
     }
-    
+
     #[test]
     fn test_parse_command_prefix_with_spaces_after() {
         let result = parse("!  spaced_cmd arg1 arg2", "!").unwrap();
@@ -158,7 +160,7 @@ mod tests {
     fn test_only_prefix() {
         assert!(parse("!", "!").is_none());
     }
-    
+
     #[test]
     fn test_prefix_and_spaces() {
         assert!(parse("!   ", "!").is_none());
@@ -172,7 +174,7 @@ mod tests {
     #[test]
     fn test_arguments_iterator_multiple_calls() {
         let parsed = parse("!cmd arg1 arg2 arg3", "!").unwrap();
-        
+
         let mut args1 = parsed.arguments();
         assert_eq!(args1.next(), Some("arg1"));
         assert_eq!(args1.remainder(), "arg2 arg3");
@@ -220,7 +222,7 @@ mod tests {
         assert_eq!(args.next(), None);
     }
 
-     #[test]
+    #[test]
     fn test_args_str_with_internal_multiple_spaces() {
         let parsed = parse("!cmd  first   second  ", "!").unwrap();
         assert_eq!(parsed.command, "cmd");

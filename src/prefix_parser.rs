@@ -66,7 +66,6 @@ pub fn parse<'a>(message: &'a str, prefix: &str) -> Option<ParsedCommand<'a>> {
     }
 
     let content_after_prefix = message.strip_prefix(prefix)?; 
-    
     let trimmed_content = content_after_prefix.trim_start();
 
     if trimmed_content.is_empty() {
@@ -74,9 +73,7 @@ pub fn parse<'a>(message: &'a str, prefix: &str) -> Option<ParsedCommand<'a>> {
     }
 
     let mut parts = trimmed_content.splitn(2, char::is_whitespace);
-    
     let command = parts.next().unwrap(); 
-
     let args_part = parts.next().unwrap_or("").trim_end();
 
     Some(ParsedCommand { command, args_part })

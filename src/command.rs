@@ -1,9 +1,10 @@
 pub mod ping;
+pub mod music; // allow for extension someday; modulizing this
 
 use std::sync::Arc;
 
 use twilight_http::Client as HttpClient;
-use twilight_interactions::command::{CommandModel, CreateCommand};
+use twilight_interactions::command::CreateCommand;
 use twilight_model::application::interaction::{Interaction, application_command::CommandData};
 use twilight_model::channel::Message;
 use twilight_model::http::interaction::{
@@ -16,7 +17,7 @@ use crate::State;
 pub struct PrefixContext<'a> {
     pub message_id: twilight_model::id::Id<twilight_model::id::marker::MessageMarker>,
     pub channel_id: twilight_model::id::Id<twilight_model::id::marker::ChannelMarker>,
-    pub message: &'a Message, // for convenience, can be removed if not needged
+    pub message: &'a Message,
     pub parsed: Arguments<'a>,
     pub prefix: String,
     pub http_client: Arc<HttpClient>,
@@ -78,14 +79,13 @@ impl<'ctx> CommandContext<'ctx> {
 }
 
 #[async_trait::async_trait]
-pub trait Command<S>: CreateCommand + CommandModel
+pub trait Command<S>: CreateCommand
 where
     S: HasHttpClient + Clone + Send + Sync + 'static + Sized,
 {
-    async fn execute<'ctx>(&self, state: S, cmd_ctx: CommandContext<'ctx>) -> anyhow::Result<()>;
+    async fn execute<'ctx>(state: S, cmd_ctx: CommandContext<'ctx>) -> anyhow::Result<()>;
 
     async fn execute_prefix_command<'msg_lifetime>(
-        &self,
         state: S,
         message_ref: &'msg_lifetime Message,
         arguments: Arguments<'msg_lifetime>,
@@ -99,12 +99,11 @@ where
             http_client: state.http_client(),
             message: message_ref,   
         };
-        self.execute(state, CommandContext::Prefix(Box::new(prefix_ctx)))
+        Self::execute(state, CommandContext::Prefix(Box::new(prefix_ctx)))
             .await
     }
 
     async fn execute_slash_command(
-        &self,
         state: S,
         interaction: Interaction,
         data: CommandData,
@@ -114,7 +113,7 @@ where
             data,
             http_client: state.http_client(),
         };
-        self.execute(state, CommandContext::Slash(Box::new(slash_ctx)))
+        Self::execute(state, CommandContext::Slash(Box::new(slash_ctx)))
             .await
     }
 }
@@ -126,8 +125,7 @@ pub async fn slash_handler(
 ) -> anyhow::Result<()> {
     match &*data.name {
         "ping" => {
-            let command = ping::PingCommand;
-            command.execute_slash_command(State { http: client.clone() }, interaction, data).await?;
+            ping::PingCommand::execute_slash_command(State { http: client.clone() }, interaction, data).await?;
         },
         name => {
             tracing::warn!("Unknown slash command: {}", name);
@@ -154,11 +152,13 @@ pub async fn prefix_handler(
 
             match command_name {
                 "ping" => {
-                    let command = ping::PingCommand;
-                    command
-                        .execute_prefix_command(state, &message, arguments, prefix_string)
+                    ping::PingCommand::execute_prefix_command(state, &message, arguments, prefix_string)
                         .await?;
-                }
+                },
+                "play" => {
+                    music::PlayCommand::execute_prefix_command(state, &message, arguments, prefix_string)
+                        .await?;
+                },
                 name => {
                     tracing::debug!("Unknown prefix command: {} from user: {}", name, message.author.name);
                 }

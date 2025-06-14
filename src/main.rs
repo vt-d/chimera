@@ -88,7 +88,7 @@ async fn main() -> anyhow::Result<()> {
 
 async fn runner(bot: &mut Bot) -> anyhow::Result<()> {
     let shard = &mut bot.shard;
-    let configured_prefix = env::var("PREFIX").unwrap_or_else(|_| "!".to_string());
+    let configured_prefix = env::var("PREFIX").unwrap_or_else(|_| ";".to_string());
 
     while let Some(item) = shard.next_event(EventTypeFlags::all()).await {
         let event = match item {

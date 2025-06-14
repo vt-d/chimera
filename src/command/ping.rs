@@ -12,7 +12,7 @@ pub struct PingCommand;
 
 #[async_trait]
 impl Command<State> for PingCommand {
-    async fn execute<'ctx>(&self, _state: State, cmd_ctx: CommandContext<'ctx>) -> Result<()> {
+    async fn execute<'ctx>(_state: State, cmd_ctx: CommandContext<'ctx>) -> Result<()> {
         cmd_ctx.reply("Pong!").await?;
         Ok(())
     }

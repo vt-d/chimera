@@ -1,4 +1,5 @@
 mod command;
+mod state;
 mod prefix_parser;
 
 use std::mem;
@@ -26,18 +27,6 @@ impl Bot {
     }
 }
 
-#[derive(Clone)]
-pub struct State {
-    pub http: Arc<twilight_http::Client>,
-}
-
-impl HasHttpClient for State {
-    fn http_client(&self) -> Arc<HttpClient> {
-        self.http.clone()
-    }
-}
-
-impl StateExt for State {}
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {

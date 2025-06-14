@@ -11,8 +11,10 @@ use twilight_model::http::interaction::{
     InteractionResponse, InteractionResponseData, InteractionResponseType,
 };
 
-use crate::State;
+use crate::state::State;
 use crate::prefix_parser::Arguments;
+
+pub type GlobalState = State;
 
 pub struct PrefixContext<'a> {
     pub message_id: twilight_model::id::Id<twilight_model::id::marker::MessageMarker>,
@@ -81,7 +83,7 @@ impl<'ctx> CommandContext<'ctx> {
 #[async_trait::async_trait]
 pub trait Command<S>: CreateCommand
 where
-    S: HasHttpClient + Clone + Send + Sync + 'static + Sized,
+    S: HasHttpClient + StateExt + Clone + Send + Sync + 'static + Sized,
 {
     async fn execute<'ctx>(state: S, cmd_ctx: CommandContext<'ctx>) -> anyhow::Result<()>;
 
@@ -116,31 +118,53 @@ where
     }
 }
 
+macro_rules! match_command {
+    ($command_name:expr, $state:expr, $interaction:expr, $data:expr, {$($cmd:literal => $handler:ty),* $(,)?}) => {
+        match $command_name {
+            $(|
+                $cmd => {
+                    <$handler>::execute_slash_command($state, $interaction, $data).await?
+                }
+            )*
+            name => {
+                tracing::warn!("Unknown slash command: {}", name);
+            }
+        }
+    };
+    ($command_name:expr, $state:expr, $message:expr, $arguments:expr, $prefix_string:expr, {$($cmd:literal => $handler:ty),* $(,)?}) => {
+        match $command_name {
+            $(|
+                $cmd => {
+                    run_prefix_command::<$handler>($state, $message, $arguments, $prefix_string).await?
+                }
+            )*
+            name => {
+                tracing::debug!(
+                    "Unknown prefix command: {} from user: {}",
+                    name,
+                    $message.author.name
+                );
+            }
+        }
+    };
+}
+
 pub async fn slash_handler(
     interaction: Interaction,
     data: CommandData,
     client: Arc<HttpClient>,
 ) -> anyhow::Result<()> {
-    match &*data.name {
-        "ping" => {
-            ping::PingCommand::execute_slash_command(
-                State {
-                    http: client.clone(),
-                },
-                interaction,
-                data,
-            )
-            .await?;
-        }
-        name => {
-            tracing::warn!("Unknown slash command: {}", name);
-        }
-    }
+    let state = GlobalState {
+        http: client.clone(), // it implements StateExt
+    };
+    match_command!(&*data.name, state, interaction, data, {
+        "ping" => ping::PingCommand,
+    });
     Ok(())
 }
 
 async fn run_prefix_command<'msg_lifetime, C>(
-    state: State,
+    state: GlobalState,
     message: &'msg_lifetime Message,
     arguments: Arguments<'msg_lifetime>,
     prefix_string: String,
@@ -163,26 +187,15 @@ pub async fn prefix_handler(
     if let Some(parsed_command) = crate::prefix_parser::parse(&message.content, configured_prefix) {
         let command_name = parsed_command.command;
         let arguments = parsed_command.arguments();
-        let state = State {
+        let state = GlobalState {
             http: client.clone(),
         };
         let prefix_string = configured_prefix.to_string();
 
-        match command_name {
-            "ping" => {
-                run_prefix_command::<ping::PingCommand>(state, &message, arguments, prefix_string).await?
-            }
-            "play" => {
-                run_prefix_command::<music::PlayCommand>(state, &message, arguments, prefix_string).await?
-            }
-            name => {
-                tracing::debug!(
-                    "Unknown prefix command: {} from user: {}",
-                    name,
-                    message.author.name
-                );
-            }
-        }
+        match_command!(command_name, state, &message, arguments, prefix_string, {
+            "ping" => ping::PingCommand,
+            "play" => music::PlayCommand,
+        });
     } 
     Ok(())
 }

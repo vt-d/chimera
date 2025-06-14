@@ -1,6 +1,5 @@
 use crate::{
-    State,
-    command::{Command, CommandContext, HasHttpClient},
+    command::{Command, CommandContext, GlobalState, HasHttpClient},
 };
 use anyhow::Result;
 use async_trait::async_trait;
@@ -11,8 +10,8 @@ use twilight_interactions::command::{CommandModel, CreateCommand};
 pub struct PingCommand;
 
 #[async_trait]
-impl Command<State> for PingCommand {
-    async fn execute<'ctx>(_state: State, cmd_ctx: CommandContext<'ctx>) -> Result<()> {
+impl Command<GlobalState> for PingCommand {
+    async fn execute<'ctx>(_state: GlobalState, cmd_ctx: CommandContext<'ctx>) -> Result<()> {
         cmd_ctx.reply("Pong!").await?;
         Ok(())
     }

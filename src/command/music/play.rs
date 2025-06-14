@@ -1,6 +1,5 @@
 use crate::{
-    State,
-    command::{Command, CommandContext},
+    command::{Command, CommandContext, GlobalState}
 };
 use anyhow::{Result, anyhow};
 use async_trait::async_trait;
@@ -15,8 +14,8 @@ pub struct PlayCommand {
 }
 
 #[async_trait]
-impl Command<State> for PlayCommand {
-    async fn execute<'ctx>(_state: State, cmd_ctx: CommandContext<'ctx>) -> Result<()> {
+impl Command<GlobalState> for PlayCommand {
+    async fn execute<'ctx>(_state: GlobalState, cmd_ctx: CommandContext<'ctx>) -> Result<()> {
         let song_query = match &cmd_ctx {
             CommandContext::Prefix(prefix_ctx) => Ok(prefix_ctx.parsed.remainder().to_string()),
             CommandContext::Slash(slash_ctx) => slash_ctx

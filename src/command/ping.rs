@@ -1,6 +1,4 @@
-use crate::{
-    command::{Command, CommandContext, GlobalState, HasHttpClient},
-};
+use crate::command::{Command, CommandContext, GlobalState, HasHttpClient};
 use anyhow::Result;
 use async_trait::async_trait;
 use twilight_interactions::command::{CommandModel, CreateCommand};

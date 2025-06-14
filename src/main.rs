@@ -1,33 +1,40 @@
-mod macros;
 mod command;
-mod state;
+mod lavalink_events;
+mod macros;
 mod prefix_parser;
+mod state;
 
+use std::collections::HashMap;
 use std::mem;
 use std::{env, sync::Arc};
 
 use dotenvy::dotenv;
+use lavalink_rs::client::LavalinkClient;
+use lavalink_rs::model::events;
+use lavalink_rs::node::NodeBuilder;
+use lavalink_rs::prelude::NodeDistributionStrategy;
+use songbird::Songbird;
+use songbird::shards::TwilightMap;
 use twilight_gateway::{CloseFrame, Event, EventTypeFlags, Intents, Shard, ShardId, StreamExt};
 use twilight_http::Client as HttpClient;
 use twilight_interactions::command::CreateCommand;
 use twilight_model::application::interaction::InteractionData;
 
-use crate::command::{HasHttpClient, StateExt};
+use crate::state::State;
 
 pub struct Bot {
     pub shard: Shard,
-    pub client: Arc<HttpClient>,
+    pub state: Arc<State>,
 }
 
 impl Bot {
-    pub fn new(shard: Shard, client: HttpClient) -> Self {
+    pub fn new(shard: Shard, state: State) -> Self {
         Self {
             shard,
-            client: Arc::new(client),
+            state: Arc::new(state),
         }
     }
 }
-
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -51,7 +58,43 @@ async fn main() -> anyhow::Result<()> {
     );
 
     let client = HttpClient::new(token);
-    let mut bot = Bot::new(initial_shard, client);
+
+    let user = client.current_user().await?.model().await?;
+    let user_id = user.id;
+    let lavalink_events = events::Events {
+        ready: Some(lavalink_events::ready_event),
+        ..Default::default()
+    };
+
+    let node_local = NodeBuilder {
+        hostname: "0.0.0.0:2333".to_string(),
+        is_ssl: false,
+        events: events::Events::default(),
+        password: std::env::var("LAVALINK_PASSWORD").unwrap_or_default(),
+        user_id: user_id.into(),
+        session_id: None,
+    };
+
+    let lavalink = LavalinkClient::new(
+        lavalink_events,
+        vec![node_local],
+        NodeDistributionStrategy::round_robin(),
+    )
+    .await;
+
+    let senders = TwilightMap::new(HashMap::from([(
+        initial_shard.id().number(),
+        initial_shard.sender(),
+    )]));
+
+    let songbird = Songbird::twilight(Arc::new(senders), user_id);
+
+    let state = State {
+        http: Arc::new(client),
+        lavalink: Arc::new(lavalink),
+        songbird: Arc::new(songbird),
+    };
+    let mut bot = Bot::new(initial_shard, state);
 
     register_commands(&bot).await?;
 
@@ -82,6 +125,7 @@ async fn main() -> anyhow::Result<()> {
 
 async fn runner(bot: &mut Bot) -> anyhow::Result<()> {
     let shard = &mut bot.shard;
+    let state = &bot.state;
     let configured_prefix = env::var("PREFIX").unwrap_or_else(|_| ";".to_string());
 
     while let Some(item) = shard.next_event(EventTypeFlags::all()).await {
@@ -110,8 +154,13 @@ async fn runner(bot: &mut Bot) -> anyhow::Result<()> {
                     }
                 };
 
-                if let Err(error) =
-                    crate::command::slash_handler(interaction_obj, data, bot.client.clone()).await
+                if let Err(error) = crate::command::slash_handler(
+                    interaction_obj,
+                    data,
+                    bot.state.http.clone(),
+                    bot.state.clone(),
+                )
+                .await
                 {
                     tracing::error!(?error, "error while handling slash command");
                 }
@@ -122,9 +171,13 @@ async fn runner(bot: &mut Bot) -> anyhow::Result<()> {
                 if message.author.bot {
                     continue;
                 }
-                if let Err(error) =
-                    crate::command::prefix_handler(message, bot.client.clone(), &configured_prefix)
-                        .await
+                if let Err(error) = crate::command::prefix_handler(
+                    message,
+                    bot.state.http.clone(),
+                    &configured_prefix,
+                    bot.state.clone(),
+                )
+                .await
                 {
                     tracing::error!(?error, "error while handling prefix command");
                 }
@@ -138,8 +191,14 @@ async fn runner(bot: &mut Bot) -> anyhow::Result<()> {
 
 async fn register_commands(bot: &Bot) -> anyhow::Result<()> {
     let commands = vec![crate::command::ping::PingCommand::create_command().into()];
-    let application = bot.client.current_user_application().await?.model().await?;
-    let interaction_client = bot.client.interaction(application.id);
+    let application = bot
+        .state
+        .http
+        .current_user_application()
+        .await?
+        .model()
+        .await?;
+    let interaction_client = bot.state.http.interaction(application.id);
 
     if let Err(error) = interaction_client.set_global_commands(&commands).await {
         tracing::error!(?error, "failed to register commands");

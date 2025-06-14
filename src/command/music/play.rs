@@ -1,6 +1,4 @@
-use crate::{
-    command::{Command, CommandContext, GlobalState}
-};
+use crate::command::{Command, CommandContext, GlobalState};
 use anyhow::{Result, anyhow};
 use async_trait::async_trait;
 use twilight_interactions::command::CreateCommand;
@@ -21,7 +19,7 @@ impl Command<GlobalState> for PlayCommand {
             CommandContext::Slash(slash_ctx) => slash_ctx
                 .data
                 .options
-                .get(0)
+                .first()
                 .ok_or_else(|| anyhow!("The 'song' option is missing for the slash command."))
                 .and_then(|option| match &option.value {
                     CommandOptionValue::String(s_val) => Ok(s_val.clone()),

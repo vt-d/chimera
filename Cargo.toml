@@ -6,16 +6,21 @@ edition = "2024"
 [dependencies]
 songbird = { version = "0.5.0", features = [
   "twilight",
+  "gateway",
+  "rustls"
 ], default-features = false }
 twilight-gateway = "0.16.0"
 twilight-http = "0.16.0"
-symphonia = { version = "0.5.0", features = ["aac", "mp3", "isomp4", "alac"] }
 tokio = { version = "1.45.1", features = ["rt-multi-thread", "signal"] }
 tracing = "0.1.41"
 tracing-subscriber = { version = "0.3.19", features = ["env-filter"] }
 dotenvy = "0.15.7"
 anyhow = "1.0.98"
 twilight-interactions = "0.16.2"
-lavalink-rs = { version = "0.14.1", features = ["songbird", "twilight"] }
 twilight-model = "0.16.0"
 async-trait = "0.1.88"
+
+[dependencies.lavalink-rs]
+git = "https://gitlab.com/vicky5124/lavalink-rs/"
+features = ["songbird", "twilight"]
+branch = "main"

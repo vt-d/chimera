@@ -3,6 +3,8 @@ pub mod ping; // allow for extension someday; modulizing this
 
 use std::sync::Arc;
 
+use lavalink_rs::client::LavalinkClient;
+use songbird::Songbird;
 use twilight_http::Client as HttpClient;
 use twilight_interactions::command::CreateCommand;
 use twilight_model::application::interaction::{Interaction, application_command::CommandData};
@@ -10,16 +12,19 @@ use twilight_model::channel::Message;
 use twilight_model::http::interaction::{
     InteractionResponse, InteractionResponseData, InteractionResponseType,
 };
+use twilight_model::id::Id;
+use twilight_model::id::marker::{ChannelMarker, MessageMarker};
 
 use crate::match_command;
-use crate::state::State;
 use crate::prefix_parser::Arguments;
+use crate::state::State;
 
-pub type GlobalState = State;
+pub type GlobalStateInner = State;
+pub type GlobalState = Arc<GlobalStateInner>;
 
 pub struct PrefixContext<'a> {
-    pub message_id: twilight_model::id::Id<twilight_model::id::marker::MessageMarker>,
-    pub channel_id: twilight_model::id::Id<twilight_model::id::marker::ChannelMarker>,
+    pub message_id: Id<MessageMarker>,
+    pub channel_id: Id<ChannelMarker>,
     pub message: &'a Message,
     pub parsed: Arguments<'a>,
     pub prefix: String,
@@ -119,16 +124,13 @@ where
     }
 }
 
-
 pub async fn slash_handler(
     interaction: Interaction,
     data: CommandData,
     client: Arc<HttpClient>,
+    state: GlobalState,
 ) -> anyhow::Result<()> {
-    let state = GlobalState {
-        http: client.clone(), // it implements StateExt
-    };
-    match_command!(&*data.name, state, interaction, data, {
+    match_command!(&*data.name, state.clone(), interaction, data, {
         "ping" => ping::PingCommand,
     });
     Ok(())
@@ -141,15 +143,16 @@ async fn run_prefix_command<'msg_lifetime, C>(
     prefix_string: String,
 ) -> anyhow::Result<()>
 where
-    C: Command<State> + Send,
+    C: Command<GlobalState> + Send,
 {
-    C::execute_prefix_command(state, message, arguments, prefix_string).await
+    C::execute_prefix_command(state.clone(), message, arguments, prefix_string).await
 }
 
 pub async fn prefix_handler(
     message: Message,
     client: Arc<HttpClient>,
     configured_prefix: &str,
+    state: Arc<GlobalStateInner>,
 ) -> anyhow::Result<()> {
     if message.author.bot {
         return Ok(());
@@ -158,16 +161,13 @@ pub async fn prefix_handler(
     if let Some(parsed_command) = crate::prefix_parser::parse(&message.content, configured_prefix) {
         let command_name = parsed_command.command;
         let arguments = parsed_command.arguments();
-        let state = GlobalState {
-            http: client.clone(),
-        };
         let prefix_string = configured_prefix.to_string();
 
         match_command!(command_name, state, &message, arguments, prefix_string, {
             "ping" => ping::PingCommand,
             "play" => music::PlayCommand,
         });
-    } 
+    }
     Ok(())
 }
 
@@ -175,4 +175,7 @@ pub trait HasHttpClient {
     fn http_client(&self) -> Arc<HttpClient>;
 }
 
-pub trait StateExt: HasHttpClient {}
+pub trait StateExt: HasHttpClient {
+    fn lavalink(&self) -> Arc<LavalinkClient>;
+    fn songbird(&self) -> Arc<Songbird>;
+}

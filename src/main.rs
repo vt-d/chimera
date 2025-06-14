@@ -1,3 +1,4 @@
+mod macros;
 mod command;
 mod state;
 mod prefix_parser;

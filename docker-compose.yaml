@@ -1,0 +1,38 @@
+version: '3.8'
+services:
+  chimera:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: chimera
+    restart: unless-stopped
+    volumes:
+      # If you have a configuration file, you might want to mount it
+      # - ./config.yaml:/usr/src/chimera/config.yaml
+      # If you have a Lavalink.jar, ensure it's accessible or managed separately
+      # For example, if Lavalink.jar is in the root of your project:
+      # - ./Lavalink.jar:/usr/src/chimera/Lavalink.jar 
+    ports:
+      # Expose any ports your bot or Lavalink might need
+      # - "2333:2333" # Example for Lavalink
+    environment:
+      # Set any necessary environment variables for your bot
+      - RUST_LOG=info # Example
+      # - DISCORD_TOKEN=${DISCORD_TOKEN}
+      # - LAVALINK_URL=http://lavalink:2333
+      # - LAVALINK_PASSWORD=youshallnotpass
+
+  # Optional: Lavalink service if you want to run it alongside your bot
+  # lavalink:
+  #   image: fredpdirect/lavalink:3.7.9 # Or your preferred Lavalink image
+  #   container_name: lavalink
+  #   restart: unless-stopped
+  #   ports:
+  #     - "2333:2333"
+  #   volumes:
+  #     - ./application.yml:/opt/Lavalink/application.yml # Mount your lavalink config
+  #   environment:
+  #     - LAVALINK_SERVER_PASSWORD=youshallnotpass
+
+# volumes:
+  # lavalink_data: # If you need to persist any Lavalink data

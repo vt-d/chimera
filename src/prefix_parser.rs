@@ -1,14 +1,12 @@
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Arguments<'a> {
-    source_str: &'a str,
     current_iter: std::str::SplitWhitespace<'a>,
     remaining_slice_for_remainder: &'a str,
 }
 
 impl<'a> Arguments<'a> {
-    fn new(args_str: &'a str) -> Self {
+    pub fn new(args_str: &'a str) -> Self {
         Arguments {
-            source_str: args_str,
             current_iter: args_str.split_whitespace(),
             remaining_slice_for_remainder: args_str,
         }

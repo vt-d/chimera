@@ -1,9 +1,6 @@
-version: '3.8'
 services:
   chimera:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    image: chimera
     container_name: chimera
     restart: unless-stopped
     volumes:
@@ -12,9 +9,8 @@ services:
       # If you have a Lavalink.jar, ensure it's accessible or managed separately
       # For example, if Lavalink.jar is in the root of your project:
       # - ./Lavalink.jar:/usr/src/chimera/Lavalink.jar 
-    ports:
-      # Expose any ports your bot or Lavalink might need
-      # - "2333:2333" # Example for Lavalink
+      # .env
+      - ./.env:/usr/src/chimera/.env
     environment:
       # Set any necessary environment variables for your bot
       - RUST_LOG=info # Example

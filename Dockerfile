@@ -11,12 +11,12 @@ COPY . .
 # Build the project
 RUN cargo build --release
 
-FROM debian:buster-slim
+FROM debian:bookworm-slim
 
 WORKDIR /usr/src/chimera
 
 # Install runtime dependencies
-RUN apt-get update && apt-get install -y libopus0 && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y libopus0 openssl ca-certificates && rm -rf /var/lib/apt/lists/*
 
 # Copy the built binary from the builder stage
 COPY --from=builder /usr/src/chimera/target/release/chimera .

@@ -1,13 +1,2 @@
-\
-# Git specific files
-.gitignore
-
-# Build artifacts
 target/
-
-# IDE specific files
-.vscode/
-.idea/
-
-# Local environment files
-.env
+.git

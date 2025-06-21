@@ -24,5 +24,10 @@ pub static COMMANDS: Lazy<Vec<CommandDefinition<GlobalState>>> = Lazy::new(|| {
         command_def!(GlobalState, SkipCommand, aliases = ["s"]),
         command_def!(GlobalState, VolumeCommand, aliases = ["vol", "v"]),
         command_def!(GlobalState, LyricsCommand, aliases = ["ly"]),
+        command_def!(
+            GlobalState,
+            HelpCommand,
+            aliases = ["h", "commands", "cmds"]
+        ),
     ]
 });

@@ -1,10 +1,14 @@
-
-use crate::{command_handler::StateExt};
+use crate::command_handler::StateExt;
 use std::sync::Arc;
 use twilight_model::{
-    application::interaction::Interaction, channel::message::{component::{ActionRow, Button}, Component}, http::interaction::{InteractionResponse, InteractionResponseType}
+    application::interaction::Interaction,
+    channel::message::{
+        Component,
+        component::{ActionRow, Button},
+    },
+    http::interaction::{InteractionResponse, InteractionResponseType},
 };
-use twilight_util::builder::InteractionResponseDataBuilder; 
+use twilight_util::builder::InteractionResponseDataBuilder;
 
 pub async fn pause_button_handler(
     state: Arc<crate::state::State>,
@@ -22,22 +26,26 @@ pub async fn pause_button_handler(
         .ok_or_else(|| anyhow::anyhow!("No player found for guild: {}", guild_id))?;
     let player_data = player.get_player().await?;
 
-
     let pause_resume = !player_data.paused;
     player.set_pause(pause_resume).await?;
 
     interaction_client
-        .create_response(interaction.id, &interaction.token, &InteractionResponse {
-            kind: InteractionResponseType::UpdateMessage,
-            data: Some(InteractionResponseDataBuilder::new()
-                .components(vec![action_menu(pause_resume)])
-                .build()),
-        })
+        .create_response(
+            interaction.id,
+            &interaction.token,
+            &InteractionResponse {
+                kind: InteractionResponseType::UpdateMessage,
+                data: Some(
+                    InteractionResponseDataBuilder::new()
+                        .components(vec![action_menu(pause_resume)])
+                        .build(),
+                ),
+            },
+        )
         .await?;
 
     Ok(())
 }
-
 
 pub fn action_menu(pause_resume: bool) -> Component {
     if pause_resume {

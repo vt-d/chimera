@@ -37,7 +37,7 @@ impl Command<GlobalState> for NowPlayingCommand {
             .as_ref()
             .ok_or_else(|| anyhow::anyhow!("No track is currently playing."))?;
         let volume = player_data.volume;
-        let position = player_data.state.position / 1000; // convert to seconds
+        let position = player_data.state.position / 1000;
         let embed = build_now_playing_embed(track, volume, position).await?;
         let component = action_menu().await;
         let response = CommandResponseBuilder::new()
@@ -57,7 +57,7 @@ pub async fn build_now_playing_embed(
     position: u64,
 ) -> Result<Embed> {
     let finishing_time =
-        chrono::Utc::now().timestamp() as u64 + position + (track.info.length / 1000);
+        chrono::Utc::now().timestamp() as u64 + (track.info.length / 1000 - position);
     let parsed_duration = humantime::format_duration(std::time::Duration::from_secs(position));
     let embed = EmbedBuilder::new()
         .title("🎶 Now Playing")

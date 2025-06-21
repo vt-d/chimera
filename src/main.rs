@@ -1,3 +1,8 @@
+#![deny(clippy::all, clippy::pedantic)]
+
+#[global_allocator]
+static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
+
 pub mod command_handler;
 pub mod commands;
 pub mod components;
@@ -6,8 +11,10 @@ pub mod gateway;
 pub mod lavalink_events;
 pub mod prefix_parser;
 pub mod state;
+pub mod utils;
 
 #[tokio::main]
+#[tracing::instrument]
 async fn main() -> anyhow::Result<()> {
     print_banner();
     crate::gateway::initialize_and_run_bot().await

@@ -53,14 +53,6 @@ pub async fn process(event: Event, state: Arc<State>) -> anyhow::Result<()> {
                 tracing::error!(error = ?e, "Error handling prefix command");
             }
         }
-        Event::VoiceStateUpdate(voice_state_update) => {
-            let voice_state = voice_state_update.0;
-            if voice_state.guild_id.is_none() || voice_state.channel_id.is_none() {
-                state.voice_states.remove(&voice_state.user_id);
-            } else {
-                state.voice_states.insert(voice_state.user_id, voice_state);
-            }
-        }
         _ => {}
     }
     Ok(())

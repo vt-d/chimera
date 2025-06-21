@@ -42,7 +42,7 @@ impl Command<GlobalState> for QueueCommand {
 pub async fn build_queue_embed(queue: &QueueRef) -> Result<Embed> {
     let mut embed = EmbedBuilder::new()
         .title("🎶 Current Queue")
-        .color(0x36393F);
+        .color(0x1DB954);
 
     if queue.get_count().await? == 0 {
         embed = embed.description("The queue is currently empty.");

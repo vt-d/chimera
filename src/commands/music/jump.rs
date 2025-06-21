@@ -2,11 +2,9 @@ use super::check_voice_state;
 use crate::command_handler::{
     Command, CommandContext, CommandResponseBuilder, GlobalState, StateExt,
 };
-use crate::prefix_parser::Arguments;
 use anyhow::Result;
 use async_trait::async_trait;
 use twilight_interactions::command::{CommandModel, CreateCommand};
-use twilight_model::application::interaction::application_command::CommandOptionValue;
 
 #[allow(unused)]
 #[derive(CommandModel, CreateCommand)]
@@ -20,29 +18,16 @@ pub struct JumpCommand {
 
 #[async_trait]
 impl Command<GlobalState> for JumpCommand {
-    async fn execute<'ctx>(state: GlobalState, cmd_ctx: CommandContext<'ctx>) -> Result<()> {
+    async fn execute<'ctx>(state: GlobalState, mut cmd_ctx: CommandContext<'ctx>) -> Result<()> {
         let guild_id = match &cmd_ctx {
             CommandContext::Prefix(prefix_ctx) => prefix_ctx.message.guild_id,
             CommandContext::Slash(slash_ctx) => slash_ctx.interaction.guild_id,
         }
         .ok_or_else(|| anyhow::anyhow!("This command must be used in a guild."))?;
 
-        let position_i64 = match &cmd_ctx {
-            CommandContext::Prefix(prefix_ctx_ref) => {
-                let mut local_args = Arguments::new(prefix_ctx_ref.parsed.remainder());
-                local_args.next().and_then(|arg| arg.parse::<i64>().ok())
-            }
-            CommandContext::Slash(slash_ctx_ref) => slash_ctx_ref
-                .data
-                .options
-                .iter()
-                .find(|opt| opt.name == "position")
-                .and_then(|opt| match &opt.value {
-                    CommandOptionValue::Integer(i_val) => Some(*i_val),
-                    _ => None,
-                }),
-        }
-        .ok_or_else(|| anyhow::anyhow!("Position argument is missing or invalid. Please provide a number (e.g., 0 for the first song)."))?;
+        let position_i64: i64 = cmd_ctx
+            .get_arg("position")
+            .ok_or_else(|| anyhow::anyhow!("Position argument is missing or invalid. Please provide a number (e.g., 0 for the first song)."))?;
 
         if position_i64 < 0 {
             return Err(anyhow::anyhow!(

@@ -12,14 +12,10 @@ pub struct Config {
 impl Config {
     pub fn from_env() -> anyhow::Result<Self> {
         let configured_prefix = env::var("PREFIX").unwrap_or_else(|_| ";".to_string());
-        let token = env::var("DISCORD_TOKEN").expect("DISCORD_TOKEN must be set");
-        let lavalink_host = env::var("LAVALINK_HOST").expect("LAVALINK_HOST must be set");
-        let lavalink_port = env::var("LAVALINK_PORT")
-            .expect("LAVALINK_PORT must be set")
-            .parse()
-            .expect("LAVALINK_PORT must be a number");
-        let lavalink_password =
-            env::var("LAVALINK_PASSWORD").expect("LAVALINK_PASSWORD must be set");
+        let token = env::var("DISCORD_TOKEN")?;
+        let lavalink_host = env::var("LAVALINK_HOST")?;
+        let lavalink_port = env::var("LAVALINK_PORT")?.parse()?;
+        let lavalink_password = env::var("LAVALINK_PASSWORD")?;
         Ok(Self {
             configured_prefix,
             token,

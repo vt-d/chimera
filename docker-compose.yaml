@@ -7,7 +7,9 @@ services:
       - ./.env:/usr/src/chimera/.env
     environment:
       RUST_LOG: "info"
-      LAVALINK_PASSWORD: "youshallnotpass"
+      LAVALINK_PASSWORD: "youshallnotpass" # default password for Lavalink
+      LAVALINK_HOST: "lavalink"
+      LAVALINK_PORT: "2333"
     depends_on:
       lavalink:
         condition: service_healthy
@@ -16,7 +18,7 @@ services:
     - lavalink
   
   lavalink:
-    image: ghcr.io/lavalink-devs/lavalink:4-alpine
+    image: ghcr.io/lavalink-devs/lavalink:4
     container_name: lavalink
     restart: unless-stopped
     environment:
@@ -30,19 +32,11 @@ services:
     ports:
       - "2333:2333"
     healthcheck:
-      test:
-        [
-          "CMD",
-          "curl",
-          "-f",
-          "-H",
-          "Authorization: youshallnotpass",
-          "http://127.0.0.1:2333/version",
-        ]
-      interval: 1s
-      start_period: 10s
-      timeout: 1s
+      test: ["CMD", "curl", "-f", "http://localhost:2333/version", "-H", "Authorization: youshallnotpass"]
+      interval: 60s
+      timeout: 10s
       retries: 5
+      start_period: 10s
 
 
 

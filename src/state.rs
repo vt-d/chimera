@@ -1,9 +1,8 @@
 use std::sync::Arc;
 
-use dashmap::DashMap;
 use songbird::Songbird;
+use twilight_cache_inmemory::{InMemoryCache, ResourceType};
 use twilight_http::Client;
-use twilight_model::voice::VoiceState;
 
 use crate::command_handler::{HasHttpClient, StateExt};
 use crate::config::Config;
@@ -14,8 +13,7 @@ pub struct State {
     pub http: Arc<twilight_http::Client>,
     pub lavalink: Arc<lavalink_rs::client::LavalinkClient>,
     pub songbird: Arc<Songbird>,
-    pub voice_states:
-        Arc<DashMap<twilight_model::id::Id<twilight_model::id::marker::UserMarker>, VoiceState>>,
+    pub cache: Arc<InMemoryCache>,
     pub config: Config,
     pub latency_ms: Arc<Mutex<Option<u128>>>,
     pub reqwest: Arc<reqwest::Client>,
@@ -54,20 +52,25 @@ impl StateExt for Arc<State> {
 }
 
 impl State {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         http: Arc<twilight_http::Client>,
         lavalink: Arc<lavalink_rs::client::LavalinkClient>,
         songbird: Arc<Songbird>,
         config: Config,
+        reqwest: Arc<reqwest::Client>,
     ) -> Self {
+        const CACHE_EVENTS: ResourceType = ResourceType::GUILD
+            .union(ResourceType::VOICE_STATE);
+
         Self {
             http,
             lavalink,
             songbird,
-            voice_states: Arc::new(DashMap::new()),
+            cache: Arc::new(InMemoryCache::builder().resource_types(CACHE_EVENTS).build()),
             config,
             latency_ms: Arc::new(Mutex::new(None)),
-            reqwest: Arc::new(reqwest::Client::new()),
+            reqwest,
         }
     }
 }

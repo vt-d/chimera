@@ -52,7 +52,6 @@ where
                 .reply_error(&e, super::response::create_error_response)
                 .await
             {
-                // Use super
                 tracing::error!(error = ?reply_err, "Failed to send error embed for prefix command");
             }
         }

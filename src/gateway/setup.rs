@@ -2,7 +2,6 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use anyhow::Context;
-use dashmap::DashMap;
 use dotenvy::dotenv;
 use lavalink_rs::client::LavalinkClient;
 use lavalink_rs::model::events as LavalinkEventsModel;
@@ -18,7 +17,6 @@ use twilight_model::gateway::payload::outgoing::update_presence::UpdatePresenceP
 use twilight_model::gateway::presence::{ActivityType, MinimalActivity, Status};
 use twilight_model::id::Id;
 use twilight_model::id::marker::UserMarker;
-use twilight_model::voice::VoiceState;
 
 use crate::commands::COMMANDS;
 use crate::config::Config;
@@ -34,21 +32,14 @@ pub struct ShardInfo {
 pub struct Bot {
     pub shard: Shard,
     pub state: Arc<State>,
-    pub voice_states: Arc<DashMap<Id<UserMarker>, VoiceState>>,
     pub shard_info_tx: mpsc::Sender<ShardInfo>,
 }
 
 impl Bot {
-    pub fn new(
-        shard: Shard,
-        state: Arc<State>,
-        voice_states: Arc<DashMap<Id<UserMarker>, VoiceState>>,
-        shard_info_tx: mpsc::Sender<ShardInfo>,
-    ) -> Self {
+    pub fn new(shard: Shard, state: Arc<State>, shard_info_tx: mpsc::Sender<ShardInfo>) -> Self {
         Self {
             shard,
             state,
-            voice_states,
             shard_info_tx,
         }
     }
@@ -57,7 +48,7 @@ impl Bot {
 fn init_tracing() -> anyhow::Result<()> {
     let subscriber = FmtSubscriber::builder()
         .with_env_filter(EnvFilter::from_default_env())
-        .with_target(false)
+        .with_target(true)
         .finish();
     tracing::subscriber::set_global_default(subscriber)
         .map_err(|e| anyhow::anyhow!("Failed to set global default tracing subscriber: {}", e))?;
@@ -111,7 +102,8 @@ async fn init_lavalink_client(
     };
 
     let node_local = NodeBuilder {
-        hostname: config.lavalink_host.clone(),
+        // format hostname: 0.0.0.0:2333
+        hostname: config.lavalink_host.clone() + ":" + &config.lavalink_port.to_string(),
         is_ssl: false,
         events: LavalinkEventsModel::Events::default(),
         password: config.lavalink_password.clone(),
@@ -143,7 +135,18 @@ fn init_app_state(
     songbird: Arc<Songbird>,
     config: Config,
 ) -> Arc<State> {
-    Arc::new(crate::state::State::new(http, lavalink, songbird, config))
+    Arc::new(crate::state::State::new(
+        http,
+        lavalink,
+        songbird,
+        config,
+        Arc::new(
+            reqwest::ClientBuilder::new()
+                .user_agent("Chimera Bot")
+                .build()
+                .expect("Failed to create reqwest client")
+        ),
+    ))
 }
 
 async fn register_bot_commands(state: Arc<State>) -> anyhow::Result<()> {
@@ -217,8 +220,6 @@ pub async fn initialize_and_run_bot() -> anyhow::Result<()> {
     .await
     .context("Failed to initialize Songbird client")?;
 
-    let voice_states_map = Arc::new(DashMap::new());
-
     let app_state = init_app_state(
         http_client.clone(),
         lavalink_client,
@@ -226,12 +227,7 @@ pub async fn initialize_and_run_bot() -> anyhow::Result<()> {
         config.clone(),
     );
 
-    let bot = Bot::new(
-        initial_shard,
-        app_state.clone(),
-        voice_states_map.clone(),
-        shard_info_tx,
-    );
+    let bot = Bot::new(initial_shard, app_state.clone(), shard_info_tx);
 
     register_bot_commands(app_state.clone())
         .await

@@ -1,6 +1,6 @@
-pub mod skip;
-pub mod pause;
 pub mod lyrics;
+pub mod pause;
+pub mod skip;
 
 pub fn register_buttons(reg: &mut crate::components::ComponentRegistry) {
     reg.register("skip", |state, interaction| {

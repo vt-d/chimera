@@ -53,6 +53,7 @@ pub async fn runner(mut bot: Bot, mut shutdown_rx: oneshot::Receiver<()>) -> any
 
                 tokio::spawn(async move {
                     let _ = state_clone.songbird.process(&event).await;
+                    let _ = state_clone.cache.update(&event);
 
                     if let Err(e) = super::process(event, state_clone).await {
                         tracing::error!(error = ?e, "Error processing event");

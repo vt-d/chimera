@@ -7,17 +7,29 @@ use async_trait::async_trait;
 use twilight_interactions::command::{CommandModel, CreateCommand};
 
 #[derive(CommandModel, CreateCommand)]
-#[command(name = "skip", desc = "Skip the currently playing song.")]
-pub struct SkipCommand;
+#[command(name = "volume", desc = "Change the volume of the player.")]
+pub struct VolumeCommand {
+    #[allow(unused)]
+    #[command(desc = "Volume level (0-150)")]
+    volume: i64,
+}
 
 #[async_trait]
-impl Command<GlobalState> for SkipCommand {
-    async fn execute<'ctx>(state: GlobalState, cmd_ctx: CommandContext<'ctx>) -> Result<()> {
+impl Command<GlobalState> for VolumeCommand {
+    async fn execute<'ctx>(state: GlobalState, mut cmd_ctx: CommandContext<'ctx>) -> Result<()> {
         let guild_id = match &cmd_ctx {
             CommandContext::Prefix(prefix_ctx) => prefix_ctx.message.guild_id,
             CommandContext::Slash(slash_ctx) => slash_ctx.interaction.guild_id,
         }
         .ok_or_else(|| anyhow::anyhow!("This command must be used in a guild."))?;
+
+        let volume: i64 = cmd_ctx.get_arg("volume").ok_or_else(|| {
+            anyhow::anyhow!("Volume argument is required and must be a number between 0 and 150.")
+        })?;
+
+        if !(0..=150).contains(&volume) {
+            anyhow::bail!("Volume must be between 0 and 150.");
+        }
 
         check_voice_state(state.clone(), &cmd_ctx).await?;
 
@@ -26,23 +38,13 @@ impl Command<GlobalState> for SkipCommand {
             .get_player_context(guild_id)
             .ok_or_else(|| anyhow::anyhow!("No player found for this guild."))?;
 
-        let track = player
-            .get_player()
-            .await?
-            .track
-            .ok_or_else(|| anyhow::anyhow!("No track is currently playing."))?;
-
-        player.skip()?;
+        player.set_volume(volume as u16).await?;
 
         let response = CommandResponseBuilder::new()
-            .content(format!(
-                "️⏩ Skipped {} to the next track.",
-                track.info.title
-            ))
+            .content(format!("Volume set to {}.", volume))
             .build();
 
         cmd_ctx.reply(response).await?;
-
         Ok(())
     }
 }

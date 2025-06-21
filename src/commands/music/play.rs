@@ -4,17 +4,15 @@ use super::join;
 use crate::command_handler::{
     Command, CommandContext, CommandResponseBuilder, GlobalState, HasHttpClient,
 };
-use anyhow::{Result, anyhow};
+use anyhow::{anyhow, Result};
 use async_trait::async_trait;
 use lavalink_rs::prelude::{SearchEngines, TrackInQueue, TrackLoadData};
-use twilight_interactions::command::CreateCommand;
+use twilight_interactions::command::{CommandModel, CreateCommand};
 use twilight_model::{
-    application::interaction::application_command::CommandOptionValue,
     channel::Message,
-    id::{Id, marker::GuildMarker},
 };
 
-#[derive(CreateCommand)]
+#[derive(CommandModel, CreateCommand)]
 #[command(name = "play", desc = "Play a song from YouTube or other sources.")]
 pub struct PlayCommand {
     #[command(desc = "The song to play")]
@@ -23,45 +21,29 @@ pub struct PlayCommand {
 
 #[async_trait]
 impl Command<GlobalState> for PlayCommand {
-    async fn execute<'ctx>(state: GlobalState, cmd_ctx: CommandContext<'ctx>) -> Result<()> {
-        let song_query = match &cmd_ctx {
-            CommandContext::Prefix(prefix_ctx) => prefix_ctx.parsed.remainder().to_string(),
-            CommandContext::Slash(slash_ctx) => slash_ctx
-                .data
-                .options
-                .iter()
-                .find(|opt| opt.name == "song")
-                .and_then(|opt| match &opt.value {
-                    CommandOptionValue::String(s_val) => Some(s_val.clone()),
-                    _ => None,
-                })
-                .ok_or_else(|| anyhow!("Song query is missing or not a string."))?,
-        };
+    async fn execute<'ctx>(state: GlobalState, mut cmd_ctx: CommandContext<'ctx>) -> Result<()> {
+        let song_query: String = cmd_ctx
+            .get_remainder_arg("song")
+            .ok_or_else(|| anyhow!("You must provide a song name or URL to play."))?;
 
-        let author = match &cmd_ctx {
-            CommandContext::Prefix(prefix_ctx) => &prefix_ctx.message.author,
-            CommandContext::Slash(slash_ctx) => slash_ctx
-                .interaction
-                .author()
-                .ok_or_else(|| anyhow!("Interaction is missing author information."))?,
-        };
+        let author = cmd_ctx
+            .author()
+            .ok_or_else(|| anyhow!("Interaction is missing author information."))?;
 
-        let guild_id: Id<GuildMarker> = match &cmd_ctx {
-            CommandContext::Prefix(prefix_ctx) => prefix_ctx.message.guild_id,
-            CommandContext::Slash(slash_ctx) => slash_ctx.interaction.guild_id,
-        }
-        .ok_or_else(|| anyhow!("This command must be used in a guild."))?;
+        let guild_id = cmd_ctx
+            .guild_id()
+            .ok_or_else(|| anyhow!("This command must be used in a guild."))?;
 
         let voice_state = state
-            .voice_states
-            .get(&author.id)
+            .cache
+            .voice_state(author.id, guild_id)
             .ok_or_else(|| anyhow!("You must be in a voice channel to use this command."))?;
 
         let msg = join(
             state.clone(),
             &cmd_ctx,
-            voice_state.clone(),
-            None,
+            voice_state.channel_id(),
+            guild_id,
             state.http_client(),
         )
         .await?;
@@ -73,7 +55,7 @@ impl Command<GlobalState> for PlayCommand {
             .ok_or_else(|| anyhow!("Player context not found. Is the bot in a voice channel?"))?;
 
         let query_term = if song_query.starts_with("http") {
-            song_query.clone()
+            song_query
         } else if (song_query.contains(':') && song_query.split(':').count() == 2)
             || song_query.contains(" - ")
         {
@@ -95,16 +77,12 @@ impl Command<GlobalState> for PlayCommand {
             }
             Some(TrackLoadData::Playlist(playlist)) => {
                 let p_info = Some(playlist.info);
-                let p_tracks = playlist
-                    .tracks
-                    .into_iter()
-                    .map(TrackInQueue::from)
-                    .collect();
+                let p_tracks = playlist.tracks.into_iter().map(TrackInQueue::from).collect();
                 (p_tracks, p_info)
             }
             Some(TrackLoadData::Error(e)) => {
-                let response_builder = CommandResponseBuilder::new()
-                    .content(format!("Error loading tracks: {}", e.message));
+                let response_builder =
+                    CommandResponseBuilder::new().content(format!("Error loading tracks: {}", e.message));
                 reply_to_join(&state, &cmd_ctx, &msg, response_builder).await?;
                 return Ok(());
             }
@@ -136,7 +114,8 @@ impl Command<GlobalState> for PlayCommand {
         } else if let Some(uri) = tracks_to_queue[0].track.info.uri.as_ref() {
             format!(
                 "`＋` Queued [`{}`](<{}>)",
-                tracks_to_queue[0].track.info.title, uri
+                tracks_to_queue[0].track.info.title,
+                uri
             )
         } else {
             format!("`＋` Queued: `{}`", tracks_to_queue[0].track.info.title)
@@ -148,11 +127,11 @@ impl Command<GlobalState> for PlayCommand {
         let response_builder = CommandResponseBuilder::new().content(reply_message);
         reply_to_join(&state, &cmd_ctx, &msg, response_builder).await?;
 
-            if let Ok(player_data) = player.get_player().await {
-        if player_data.track.is_none() && queue.get_track(0).await.is_ok_and(|x| x.is_some()) {
-            player.skip()?;
+        if let Ok(player_data) = player.get_player().await {
+            if player_data.track.is_none() && queue.get_track(0).await.is_ok_and(|x| x.is_some()) {
+                player.skip()?;
+            }
         }
-    }
 
         Ok(())
     }
@@ -170,15 +149,9 @@ pub async fn reply_to_join(
         let http_client = state.http_client();
         let mut create_message = http_client.create_message(msg.channel_id).reply(msg.id);
 
-        if !response.content.is_empty() {
-            create_message = create_message.content(&response.content);
-        }
-        if !response.embeds.is_empty() {
-            create_message = create_message.embeds(&response.embeds);
-        }
-        if !response.components.is_empty() {
-            create_message = create_message.components(&response.components);
-        }
+        create_message = create_message.content(&response.content);
+        create_message = create_message.embeds(&response.embeds);
+        create_message = create_message.components(&response.components);
 
         create_message
             .await

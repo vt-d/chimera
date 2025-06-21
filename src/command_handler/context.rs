@@ -1,16 +1,88 @@
+use std::str::FromStr;
 use std::sync::Arc;
 use twilight_http::Client as HttpClient;
 use twilight_model::{
-    application::interaction::{Interaction, application_command::CommandData},
+    application::interaction::{
+        Interaction,
+        application_command::{CommandData, CommandOptionValue},
+    },
     channel::Message,
     id::{
         Id,
-        marker::{ChannelMarker, MessageMarker},
+        marker::{ChannelMarker, GuildMarker, MessageMarker},
     },
 };
 
 use crate::command_handler::response::CommandResponse;
 use crate::prefix_parser::Arguments;
+
+pub trait FromCommandOptionValue: Sized {
+    fn from_option_value(value: &CommandOptionValue) -> Option<Self>;
+}
+
+impl FromCommandOptionValue for String {
+    fn from_option_value(value: &CommandOptionValue) -> Option<Self> {
+        if let CommandOptionValue::String(s) = value {
+            Some(s.clone())
+        } else {
+            None
+        }
+    }
+}
+
+impl FromCommandOptionValue for i64 {
+    fn from_option_value(value: &CommandOptionValue) -> Option<Self> {
+        if let CommandOptionValue::Integer(i) = value {
+            Some(*i)
+        } else {
+            None
+        }
+    }
+}
+
+impl FromCommandOptionValue for u64 {
+    fn from_option_value(value: &CommandOptionValue) -> Option<Self> {
+        match value {
+            CommandOptionValue::Integer(i) => (*i).try_into().ok(),
+            CommandOptionValue::User(id) => Some(id.get()),
+            CommandOptionValue::Channel(id) => Some(id.get()),
+            CommandOptionValue::Role(id) => Some(id.get()),
+            CommandOptionValue::Mentionable(id) => Some(id.get()),
+            CommandOptionValue::String(s) => s.parse().ok(),
+            _ => None,
+        }
+    }
+}
+
+impl FromCommandOptionValue for usize {
+    fn from_option_value(value: &CommandOptionValue) -> Option<Self> {
+        if let CommandOptionValue::Integer(i) = value {
+            (*i).try_into().ok()
+        } else {
+            None
+        }
+    }
+}
+
+impl FromCommandOptionValue for bool {
+    fn from_option_value(value: &CommandOptionValue) -> Option<Self> {
+        if let CommandOptionValue::Boolean(b) = value {
+            Some(*b)
+        } else {
+            None
+        }
+    }
+}
+
+impl FromCommandOptionValue for f64 {
+    fn from_option_value(value: &CommandOptionValue) -> Option<Self> {
+        if let CommandOptionValue::Number(n) = value {
+            Some(*n)
+        } else {
+            None
+        }
+    }
+}
 
 pub struct PrefixContext<'a> {
     pub message_id: Id<MessageMarker>,
@@ -125,10 +197,91 @@ impl<'ctx> CommandContext<'ctx> {
         Ok(())
     }
 
+    pub fn get_arg<T>(&mut self, name: &str) -> Option<T>
+    where
+        T: FromStr + FromCommandOptionValue,
+        <T as FromStr>::Err: std::fmt::Debug,
+    {
+        match self {
+            CommandContext::Prefix(prefix_ctx) => {
+                prefix_ctx.as_mut().parsed.next().and_then(|s| {
+                    s.parse::<T>()
+                        .map_err(|e| {
+                            tracing::debug!("Failed to parse prefix arg '{}' as T: {:?}", s, e);
+                        })
+                        .ok()
+                })
+            }
+            CommandContext::Slash(slash_ctx) => slash_ctx
+                .as_ref()
+                .data
+                .options
+                .iter()
+                .find(|opt| opt.name == name)
+                .and_then(|opt_data| {
+                    T::from_option_value(&opt_data.value).or_else(|| {
+                        let as_string = match &opt_data.value {
+                            CommandOptionValue::String(s) => Some(s.clone()),
+                            CommandOptionValue::Integer(i) => Some(i.to_string()),
+                            CommandOptionValue::Boolean(b) => Some(b.to_string()),
+                            CommandOptionValue::Number(n) => Some(n.to_string()),
+                            CommandOptionValue::User(id) => Some(id.to_string()),
+                            CommandOptionValue::Channel(id) => Some(id.to_string()),
+                            CommandOptionValue::Role(id) => Some(id.to_string()),
+                            CommandOptionValue::Mentionable(id) => Some(id.to_string()),
+                            _ => None,
+                        };
+
+                        as_string.and_then(|s| {
+                            s.parse::<T>()
+                                .map_err(|e| {
+                                    tracing::debug!(
+                                        "Failed to parse slash arg '{}' value '{:?}' as T via FromStr fallback: {:?}",
+                                        name,
+                                        opt_data.value,
+                                        e
+                                    );
+                                })
+                                .ok()
+                        })
+                    })
+                }),
+        }
+    }
+
+    pub fn get_remainder_arg(&mut self, name: &str) -> Option<String> {
+        match self {
+            CommandContext::Prefix(prefix_ctx) => {
+                let remainder = prefix_ctx.parsed.remainder().to_string();
+                while prefix_ctx.parsed.next().is_some() {}
+                if remainder.is_empty() {
+                    None
+                } else {
+                    Some(remainder)
+                }
+            }
+            CommandContext::Slash(_) => self.get_arg(name),
+        }
+    }
+
     pub fn author(&self) -> Option<&twilight_model::user::User> {
         match self {
             CommandContext::Prefix(prefix_ctx) => Some(&prefix_ctx.message.author),
             CommandContext::Slash(slash_ctx) => slash_ctx.interaction.user.as_ref(),
+        }
+    }
+
+    pub fn guild_id(&self) -> Option<Id<GuildMarker>> {
+        match self {
+            CommandContext::Prefix(prefix_ctx) => prefix_ctx.message.guild_id,
+            CommandContext::Slash(slash_ctx) => slash_ctx.interaction.guild_id,
+        }
+    }
+
+    pub fn channel_id(&self) -> Option<Id<ChannelMarker>> {
+        match self {
+            CommandContext::Prefix(prefix_ctx) => Some(prefix_ctx.channel_id),
+            CommandContext::Slash(slash_ctx) => slash_ctx.interaction.channel.as_ref().map(|channel| channel.id),
         }
     }
 }

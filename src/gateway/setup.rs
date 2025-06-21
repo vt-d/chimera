@@ -249,7 +249,7 @@ pub async fn initialize_and_run_bot() -> anyhow::Result<()> {
 
     let (shutdown_tx, shutdown_rx) = oneshot::channel::<()>();
 
-    let runner_handle = tokio::spawn(async move { runner(bot, shutdown_rx).await });
+    let runner_handle: tokio::task::JoinHandle<anyhow::Result<()>> = tokio::spawn(async move { runner(bot, shutdown_rx).await });
 
     if let Err(e) = tokio::signal::ctrl_c().await {
         tracing::error!(error = ?e, "Failed to listen for ctrl_c signal");

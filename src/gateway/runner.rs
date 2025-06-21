@@ -9,6 +9,7 @@ pub async fn runner(mut bot: Bot, mut shutdown_rx: oneshot::Receiver<()>) -> any
 
     loop {
         tokio::select! {
+            biased;
 
             _ = &mut shutdown_rx => {
                 tracing::info!("Gateway runner received shutdown signal. Exiting event loop.");
@@ -17,20 +18,21 @@ pub async fn runner(mut bot: Bot, mut shutdown_rx: oneshot::Receiver<()>) -> any
 
             item = bot.shard.next_event(EventTypeFlags::all()) => {
                 let event = match item {
-                    Some(Ok(Event::GatewayClose(frame))) => {
-                        tracing::info!(?frame, "Gateway connection closed by Discord, exiting runner.");
-                        return Ok(());
+                    None => {
+                        tracing::info!("Shard event stream ended. Runner will exit.");
+                        break;
                     }
                     Some(Ok(event)) => event,
                     Some(Err(source)) => {
-                        tracing::warn!(?source, "Error receiving event from shard");
-                        break;
-                    }
-                    None => {
-                        tracing::info!("Shard event stream ended.");
+                        tracing::error!(?source, "Error receiving event from shard, exiting runner.");
                         break;
                     }
                 };
+
+                if let Event::GatewayClose(frame) = &event {
+                    tracing::warn!(?frame, "Gateway connection closed permanently by Discord, exiting runner.");
+                    break;
+                }
 
                 if let Event::GatewayHeartbeatAck = &event {
                     let latency_obj = bot.shard.latency();
@@ -64,8 +66,8 @@ pub async fn runner(mut bot: Bot, mut shutdown_rx: oneshot::Receiver<()>) -> any
     }
 
     tracing::info!("Gateway runner loop ended. Closing shard...");
+    // The shard might already be closed, but it's safe to call close again.
     bot.shard.close(CloseFrame::NORMAL);
-    tracing::info!("Shard closed successfully.");
 
     Ok(())
 }

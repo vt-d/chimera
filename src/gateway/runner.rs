@@ -24,13 +24,21 @@ pub async fn runner(mut bot: Bot, mut shutdown_rx: oneshot::Receiver<()>) -> any
                     }
                     Some(Ok(event)) => event,
                     Some(Err(source)) => {
-                        tracing::error!(?source, "Error receiving event from shard, exiting runner.");
-                        break;
+                        tracing::warn!(?source, "Error receiving event from shard");
+                        continue;
                     }
                 };
 
                 if let Event::GatewayClose(frame) = &event {
-                    tracing::warn!(?frame, "Gateway connection closed permanently by Discord, exiting runner.");
+                    match shutdown_rx.try_recv() {
+                        Ok(_) | Err(tokio::sync::oneshot::error::TryRecvError::Closed) => {
+                            tracing::info!(?frame, "Gateway connection closed during planned shutdown.");
+                        }
+                        Err(tokio::sync::oneshot::error::TryRecvError::Empty) => {
+                            tracing::warn!(?frame, "Gateway connection closed unexpectedly by Discord. The runner will exit as this is non-resumable.");
+                        }
+                    }
+                    // GatewayClose is always a terminal event for the shard's event stream, so we must exit the loop.
                     break;
                 }
 
@@ -66,7 +74,6 @@ pub async fn runner(mut bot: Bot, mut shutdown_rx: oneshot::Receiver<()>) -> any
     }
 
     tracing::info!("Gateway runner loop ended. Closing shard...");
-    // The shard might already be closed, but it's safe to call close again.
     bot.shard.close(CloseFrame::NORMAL);
 
     Ok(())
